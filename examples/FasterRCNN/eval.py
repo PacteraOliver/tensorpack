@@ -90,6 +90,9 @@ def non_max_suppression_fast(boxes, probs=None, overlapThresh=0.3):
                                                np.where(overlap > overlapThresh)[0])))
 
     # return only the bounding boxes that were picked
+    logger.info('PICK!!')
+    logger.info(pick)
+
     return boxes[pick]
 
 

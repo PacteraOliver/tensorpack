@@ -7,6 +7,7 @@ from collections import namedtuple
 import numpy as np
 import cv2
 
+from tensorpack import *
 from tensorpack.utils.utils import get_tqdm_kwargs
 
 from pycocotools.coco import COCO
@@ -87,6 +88,67 @@ def detect_one_image(img, model_func):
         masks = [None] * len(boxes)
 
     results = [DetectionResult(*args) for args in zip(boxes, probs, labels, masks)]
+    return results
+
+
+def detect_one_image_scale(img, model_func):
+    """
+    Run detection on one image, using the TF callable.
+    This function should handle the preprocessing internally.
+
+    Args:
+        img: an image
+        model_func: a callable from TF model,
+            takes image and returns (boxes, probs, labels, [masks])
+
+    Returns:
+        [DetectionResult]
+    """
+    scores_ts = []
+    boxes_ts = []
+    labels_ts = []
+    masks_ts = []
+
+    def add_preds_t(scores_t, boxes_t, labels_t, masks_t):
+        scores_ts.append(scores_t)
+        boxes_ts.append(boxes_t)
+        labels_ts.append(labels_t)
+        masks_ts.append(masks_t)
+
+    orig_shape = img.shape[:2]
+    for bbox_aug_scale in cfg.TEST.BBOX_AUG_SCALES:
+        resizer = CustomResize(bbox_aug_scale, cfg.TEST.BBOX_AUG_MAX_SIZE)
+        resized_img = resizer.augment(img)
+        scale = np.sqrt(resized_img.shape[0] * 1.0 / img.shape[0] * resized_img.shape[1] / img.shape[1])
+        boxes, probs, labels, *masks = model_func(resized_img)
+        boxes = boxes / scale
+        # boxes are already clipped inside the graph, but after the floating point scaling, this may not be true any more.
+        boxes = clip_boxes(boxes, orig_shape)
+        add_preds_t(probs, boxes, labels, masks)
+
+    if cfg.TEST.BBOX_AUG_COORD_HEUR == 'UNION':
+        boxes_c = np.vstack(boxes_ts)
+        scores_c = np.vstack(scores_ts)
+        lables_c = np.vstack(labels_ts)
+        masks_c = np.vstack(masks_ts)
+
+    # Apply NMS
+
+    logger.info("detect_one_image_scale...")
+    logger.info(boxes_c)
+    logger.info(scores_c)
+
+
+    if masks:
+        # has mask
+        full_masks = [fill_full_mask(box, mask, orig_shape)
+                      for box, mask in zip(boxes_c, masks_c[0])]
+        masks = full_masks
+    else:
+        # fill with none
+        masks = [None] * len(boxes_c)
+
+    results = [DetectionResult(*args) for args in zip(boxes_c, scores_c, lables_c, masks)]
     return results
 
 

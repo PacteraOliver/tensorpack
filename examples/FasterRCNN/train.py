@@ -22,7 +22,6 @@ assert six.PY3, "FasterRCNN requires Python 3!"
 from tensorpack import *
 from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils import optimizer
-from tensorpack.tfutils.common import get_tf_version_tuple
 import tensorpack.utils.viz as tpviz
 
 from coco import COCODetection
@@ -51,7 +50,7 @@ from viz import (
     draw_annotation, draw_proposal_recall,
     draw_predictions, draw_final_outputs)
 from eval import (
-    eval_coco, detect_one_image, print_evaluation_scores, DetectionResult)
+    eval_coco, detect_one_image_scale, print_evaluation_scores, DetectionResult)
 from config import finalize_configs, config as cfg
 
 
@@ -250,8 +249,8 @@ class ResNetC4Model(DetectionModel):
             if cfg.MODE_MASK:
                 roi_resized = roi_align(featuremap, final_boxes * (1.0 / cfg.RPN.ANCHOR_STRIDE), 14)
                 feature_maskrcnn = resnet_conv5(roi_resized, cfg.BACKBONE.RESNET_NUM_BLOCK[-1])
-                mask_logits = maskrcnn_upXconv_head(
-                    'maskrcnn', feature_maskrcnn, cfg.DATA.NUM_CATEGORY, 0)   # #result x #cat x 14x14
+                mask_logits = maskrcnn_upXconv_head('maskrcnn', feature_maskrcnn, cfg.DATA.NUM_CATEGORY, 0)
+                # #result x #cat x 14x14
                 indices = tf.stack([tf.range(tf.size(final_labels)), tf.to_int32(final_labels) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='final_masks')
@@ -452,7 +451,7 @@ def visualize(model, model_path, nr_visualize=100, output_dir='output'):
 def offline_evaluate(pred_func, output_file):
     df = get_eval_dataflow()
     all_results = eval_coco(
-        df, lambda img: detect_one_image(img, pred_func))
+        df, lambda img: detect_one_image_scale(img, pred_func))
     with open(output_file, 'w') as f:
         json.dump(all_results, f)
     print_evaluation_scores(output_file)
@@ -460,7 +459,7 @@ def offline_evaluate(pred_func, output_file):
 
 def predict(pred_func, input_file):
     img = cv2.imread(input_file, cv2.IMREAD_COLOR)
-    results = detect_one_image(img, pred_func)
+    results = detect_one_image_scale(img, pred_func)
     final = draw_final_outputs(img, results)
     viz = np.concatenate((img, final), axis=1)
     tpviz.interactive_imshow(viz)
@@ -482,7 +481,7 @@ class EvalCallback(Callback):
         logger.info("[EvalCallback] Will evaluate at epoch " + str(sorted(self.epochs_to_eval)))
 
     def _eval(self):
-        all_results = eval_coco(self.df, lambda img: detect_one_image(img, self.pred))
+        all_results = eval_coco(self.df, lambda img: detect_one_image_scale(img, self.pred))
         output_file = os.path.join(
             logger.get_logger_dir(), 'outputs{}.json'.format(self.global_step))
         with open(output_file, 'w') as f:
@@ -511,10 +510,6 @@ if __name__ == '__main__':
                                           "This argument is the path to the input image file")
     parser.add_argument('--config', help="A list of KEY=VALUE to overwrite those defined in config.py",
                         nargs='+')
-
-    if get_tf_version_tuple() < (1, 6):
-        # https://github.com/tensorflow/tensorflow/issues/14657
-        logger.warn("TF<1.6 has a bug which may lead to crash in FasterRCNN training if you're unlucky.")
 
     args = parser.parse_args()
     if args.config:

@@ -61,15 +61,15 @@ _C.MODE_FPN = False
 
 # dataset -----------------------
 _C.DATA.BASEDIR = '/path/to/your/COCO/DIR'
-_C.DATA.TRAIN = ['train2014', 'valminusminival2014']   # i.e., trainval35k
-_C.DATA.VAL = 'minival2014'   # For now, only support evaluation on single dataset
-_C.DATA.NUM_CATEGORY = 80    # 80 categories.
+_C.DATA.TRAIN = ['train2014']   # i.e., trainval35k
+_C.DATA.VAL = 'val2014'   # For now, only support evaluation on single dataset
+_C.DATA.NUM_CATEGORY = 2    # 80 categories.
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
 
 # basemodel ----------------------
 _C.BACKBONE.WEIGHTS = ''   # /path/to/weights.npz
-_C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]     # for resnet50
-# RESNET_NUM_BLOCK = [3, 4, 23, 3]    # for resnet101
+# _C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]     # for resnet50
+_C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
 _C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN
 _C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2
@@ -86,7 +86,7 @@ _C.BACKBONE.STRIDE_1X1 = False  # True for MSRA models
 # schedule -----------------------
 # The schedule and learning rate here is defined for a total batch size of 8.
 # If not running with 8 GPUs, they will be adjusted automatically in code.
-_C.TRAIN.NUM_GPUS = None         # by default, will be set from code
+_C.TRAIN.NUM_GPUS = 4         # by default, will be set from code
 _C.TRAIN.WEIGHT_DECAY = 1e-4
 _C.TRAIN.BASE_LR = 1e-2
 _C.TRAIN.WARMUP = 1000    # in steps
@@ -157,6 +157,13 @@ _C.TEST.FRCNN_NMS_THRESH = 0.5
 _C.TEST.RESULT_SCORE_THRESH = 1e-4
 _C.TEST.RESULT_SCORE_THRESH_VIS = 0.3   # only visualize confident results
 _C.TEST.RESULTS_PER_IM = 100
+
+# Multi Scale Testing
+_C.TEST.BBOX_AUG_ENABLE = True
+# SCALES: (200, 300, 400, 500, 600, 700, 800)
+_C.TEST.BBOX_AUG_SCALES = (400, 800)
+_C.TEST.BBOX_AUG_MAX_SIZE = 2120
+_C.TEST.BBOX_AUG_COORD_HEUR = 'UNION'
 
 
 def finalize_configs(is_training):

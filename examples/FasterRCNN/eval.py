@@ -29,6 +29,71 @@ mask: None, or a binary image of the original image shape
 """
 
 
+def non_max_suppression_fast(boxes, probs=None, overlapThresh=0.3):
+    # if there are no boxes, return an empty list
+    if len(boxes) == 0:
+        return []
+
+    # if the bounding boxes are integers, convert them to floats -- this
+    # is important since we'll be doing a bunch of divisions
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+
+    # initialize the list of picked indexes
+    pick = []
+
+    # grab the coordinates of the bounding boxes
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+
+    # compute the area of the bounding boxes and grab the indexes to sort
+    # (in the case that no probabilities are provided, simply sort on the
+    # bottom-left y-coordinate)
+    area = (x2 - x1 + 1) * (y2 - y1 + 1)
+    idxs = y2
+
+    # if probabilities are provided, sort on them instead
+    if probs is not None:
+        idxs = probs
+
+    # sort the indexes
+    idxs = np.argsort(idxs)
+
+    # keep looping while some indexes still remain in the indexes list
+    while len(idxs) > 0:
+        # grab the last index in the indexes list and add the index value
+        # to the list of picked indexes
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+
+        # find the largest (x, y) coordinates for the start of the bounding
+        # box and the smallest (x, y) coordinates for the end of the bounding
+        # box
+        xx1 = np.maximum(x1[i], x1[idxs[:last]])
+        yy1 = np.maximum(y1[i], y1[idxs[:last]])
+        xx2 = np.minimum(x2[i], x2[idxs[:last]])
+        yy2 = np.minimum(y2[i], y2[idxs[:last]])
+
+        # compute the width and height of the bounding box
+        w = np.maximum(0, xx2 - xx1 + 1)
+        h = np.maximum(0, yy2 - yy1 + 1)
+
+        # compute the ratio of overlap
+        overlap = (w * h) / area[idxs[:last]]
+
+        # delete all indexes from the index list that have overlap greater
+        # than the provided overlap threshold
+        idxs = np.delete(idxs, np.concatenate(([last],
+                                               np.where(overlap > overlapThresh)[0])))
+
+    # return only the bounding boxes that were picked
+    return boxes[pick]
+
+
+
 def fill_full_mask(box, mask, shape):
     """
     Args:
@@ -117,7 +182,6 @@ def detect_one_image_scale(img, model_func):
 
     orig_shape = img.shape[:2]
     for bbox_aug_scale in cfg.TEST.BBOX_AUG_SCALES:
-        logger.info(bbox_aug_scale)
         resizer = CustomResize(bbox_aug_scale, cfg.TEST.BBOX_AUG_MAX_SIZE)
         resized_img = resizer.augment(img)
         scale = np.sqrt(resized_img.shape[0] * 1.0 / img.shape[0] * resized_img.shape[1] / img.shape[1])
@@ -125,8 +189,6 @@ def detect_one_image_scale(img, model_func):
         boxes = boxes / scale
         # boxes are already clipped inside the graph, but after the floating point scaling, this may not be true any more.
         boxes = clip_boxes(boxes, orig_shape)
-        logger.info(boxes)
-        logger.info("***************")
         add_preds_t(probs, boxes, labels, masks)
 
     if cfg.TEST.BBOX_AUG_COORD_HEUR == 'UNION':
@@ -135,13 +197,13 @@ def detect_one_image_scale(img, model_func):
         lables_c = np.vstack(labels_ts)
         masks_c = np.vstack(masks_ts)
 
-    # Apply NMS
+        # Apply NMS
+        logger.info(boxes_c)
 
-    logger.info("detect_one_image_scale...")
-    logger.info(boxes_c)
-    logger.info(scores_c)
-    logger.info("##########################")
+        pick = non_max_suppression_fast(boxes_c, scores_c, 0.5)
 
+        logger.info("detect_one_image_scale...NMS...")
+        logger.info(pick)
 
     if masks:
         # has mask

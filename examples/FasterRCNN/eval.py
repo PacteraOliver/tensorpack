@@ -125,7 +125,8 @@ def detect_one_image_scale(img, model_func):
         boxes = boxes / scale
         # boxes are already clipped inside the graph, but after the floating point scaling, this may not be true any more.
         boxes = clip_boxes(boxes, orig_shape)
-        logger.info(boxes + "\n************************\n")
+        logger.info(boxes)
+        logger.info("***************")
         add_preds_t(probs, boxes, labels, masks)
 
     if cfg.TEST.BBOX_AUG_COORD_HEUR == 'UNION':
@@ -139,6 +140,7 @@ def detect_one_image_scale(img, model_func):
     logger.info("detect_one_image_scale...")
     logger.info(boxes_c)
     logger.info(scores_c)
+    logger.info("##########################")
 
 
     if masks:
